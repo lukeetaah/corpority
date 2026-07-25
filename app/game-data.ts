@@ -1,97 +1,47 @@
+export type Locale = "es-AR" | "en";
 export type Stat = "salary" | "health" | "reputation" | "energy" | "motivation" | "influence" | "savings";
 export type Changes = Partial<Record<Stat, number>>;
 
 export type Choice = { label: string; consequence: string; changes: Changes; tag?: string };
-export type CorporateEvent = {
-  id: string;
-  title: string;
-  description: string;
-  category: string;
-  changes: Changes;
-  choices?: Choice[];
-  rarity: "common" | "uncommon" | "rare" | "legendary";
+export type CorporateEvent = { id: string; title: string; description: string; category: string; changes: Changes; choices?: Choice[]; rarity: "common" | "uncommon" | "rare" | "legendary" };
+type Situation = readonly [string, string];
+
+const situations: Record<Locale, readonly Situation[]> = {
+  en: [
+    ["Calendar Ambush", "A meeting appeared in your calendar with no agenda and seventeen attendees."], ["Reply All Incident", "Someone has replied all to a thread that should have died in 2019."], ["Strategic Realignment", "Leadership has found a new name for doing the same work with fewer people."], ["Executive Walkthrough", "An executive is visiting. Suddenly, every desk has plants."], ["The New Framework", "A consultant has introduced a framework with a memorable acronym and no owner."], ["Coffee Machine Diplomacy", "The coffee machine is broken. Informal power structures are forming nearby."], ["Mandatory Fun", "You have been invited to a voluntary event whose attendance is being tracked."], ["Inbox Archaeology", "A request from six months ago has resurfaced, marked urgent by someone new."], ["Scope Creep", "A small request has grown legs, a budget, and expectations."], ["Synergy Workshop", "You spend three hours putting sticky notes into quadrants."], ["Quiet Resignation", "Your most capable teammate resigned and left a folder called 'final_final_v7'."], ["Budget Weather", "Finance has forecast a 4% chance of spending any money."], ["Password Expired", "Your password expired during a presentation. Security is delighted."], ["All Hands", "The company announces excellent results and asks everyone to be prudent."], ["Offsite Logistics", "The team building venue is two hours away and somehow mandatory."], ["Priority Reversal", "Yesterday's top priority is now 'nice to have'."], ["The Recognition Post", "A public thank-you names everyone except the people who did the work."], ["Procurement Odyssey", "You need approval from five departments to buy a cable."], ["Performance Calibration", "Managers are comparing employees to a bell curve they do not understand."], ["Vendor Lunch", "A vendor promises to transform your workflow after a steak lunch."], ["Open Office Acoustics", "A sales call, a birthday, and a crisis meeting are happening within four meters."], ["Reorg Rumor", "The org chart is being edited at midnight. Nobody will say why."], ["Innovation Sprint", "You must innovate by Friday using a template from last year."], ["Manager's Favorite", "A colleague has an idea identical to yours, now with executive sponsorship."], ["Compliance Reminder", "A compliance module is due today and takes exactly as long as your patience."], ["Town Hall Question", "The CEO asks for questions, then selects one about the office snacks."], ["Remote Work Exception", "The policy has an exception process designed to discourage exceptions."], ["Spreadsheet Ownership", "A critical spreadsheet has no owner, no documentation, and 14 hidden tabs."], ["Quarter-End Heroics", "Everything is urgent because the calendar is about to change."], ["New Manager Energy", "Your new manager wants to meet everyone weekly to 'build trust'."], ["Visibility Project", "You are offered a visible project that has already failed twice."], ["Office Politics", "Two leaders want mutually exclusive things by the same deadline."], ["Holiday Blackout", "A vacation request meets a business-critical release window."], ["Career Conversation", "Your manager asks where you see yourself, then checks their phone."], ["Corporate Wellness", "A mindfulness webinar arrives between two crisis calls."], ["The Escalation", "A minor issue has been escalated to people whose titles are longer than the issue."],
+  ],
+  "es-AR": [
+    ["Emboscada de calendario", "Te apareció una reunión sin agenda y con diecisiete asistentes."], ["Incidente de responder a todos", "Alguien revivió un hilo que debió morir en 2019."], ["Realineamiento estratégico", "La dirección encontró otro nombre para hacer lo mismo con menos gente."], ["Recorrida ejecutiva", "Viene un ejecutivo. De repente, todas las oficinas tienen plantas."], ["El nuevo framework", "Un consultor presentó un framework con sigla memorable y cero dueños."], ["Diplomacia de cafetera", "La cafetera se rompió. Cerca de ella se forman nuevos centros de poder."], ["Diversión obligatoria", "Te invitaron a un evento voluntario cuya asistencia se está registrando."], ["Arqueología de inbox", "Resurgió un pedido de hace seis meses, marcado urgente por alguien nuevo."], ["Scope creep", "Un pedido chico desarrolló patas, presupuesto y expectativas."], ["Taller de sinergia", "Pasás tres horas pegando post-its en cuadrantes."], ["Renuncia silenciosa", "La persona más capaz del equipo se fue y dejó una carpeta llamada final_final_v7."], ["Clima presupuestario", "Finanzas pronosticó un 4% de probabilidad de gastar plata."], ["Contraseña vencida", "Tu contraseña venció durante una presentación. Seguridad está feliz."], ["All hands", "La empresa anuncia resultados excelentes y pide que todos sean prudentes."], ["Logística de offsite", "El team building queda a dos horas y, de algún modo, es obligatorio."], ["Cambio de prioridad", "La prioridad número uno de ayer ahora es un lindo extra."], ["El post de reconocimiento", "El agradecimiento público nombra a todos menos a quienes hicieron el trabajo."], ["Odisea de compras", "Necesitás aprobación de cinco áreas para comprar un cable."], ["Calibración de desempeño", "Los managers comparan personas con una campana de Gauss que no entienden."], ["Almuerzo con vendor", "Un proveedor promete transformar el workflow después de un bife."], ["Acústica de oficina abierta", "Una llamada de ventas, un cumpleaños y una crisis suceden a cuatro metros."], ["Rumor de reorganización", "El organigrama se edita a medianoche. Nadie dice por qué."], ["Sprint de innovación", "Tenés que innovar para el viernes usando una plantilla del año pasado."], ["Favorito del manager", "Un colega tiene tu misma idea, pero ahora con sponsor ejecutivo."], ["Recordatorio de compliance", "El módulo de compliance vence hoy y tarda exactamente lo que dura tu paciencia."], ["Pregunta de town hall", "El CEO pide preguntas y elige una sobre los snacks."], ["Excepción de home office", "La política tiene un proceso de excepción diseñado para desalentar excepciones."], ["Dueño de planilla", "Una planilla crítica no tiene dueño, documentación ni menos de catorce pestañas ocultas."], ["Heroísmo de cierre", "Todo es urgente porque el calendario está por cambiar."], ["Energía de manager nuevo", "Tu nuevo manager quiere reunirse semanalmente con todos para generar confianza."], ["Proyecto de visibilidad", "Te ofrecen un proyecto visible que ya fracasó dos veces."], ["Política de oficina", "Dos líderes piden cosas incompatibles para la misma fecha."], ["Bloqueo de vacaciones", "Tu pedido de vacaciones choca con una ventana de entrega crítica."], ["Charla de carrera", "Tu manager pregunta dónde te ves y después mira el celular."], ["Bienestar corporativo", "Entre dos llamadas de crisis llega una charla de mindfulness."], ["La escalada", "Un tema menor escaló a gente cuyos cargos son más largos que el problema."],
+  ],
 };
 
-const situations = [
-  ["Calendar Ambush", "A meeting appeared in your calendar with no agenda and seventeen attendees."],
-  ["Reply All Incident", "Someone has replied all to a thread that should have died in 2019."],
-  ["Strategic Realignment", "Leadership has found a new name for doing the same work with fewer people."],
-  ["Executive Walkthrough", "An executive is visiting. Suddenly, every desk has plants."],
-  ["The New Framework", "A consultant has introduced a framework with a memorable acronym and no owner."],
-  ["Coffee Machine Diplomacy", "The coffee machine is broken. Informal power structures are forming nearby."],
-  ["Mandatory Fun", "You have been invited to a voluntary event whose attendance is being tracked."],
-  ["Inbox Archaeology", "A request from six months ago has resurfaced, marked urgent by someone new."],
-  ["Scope Creep", "A small request has grown legs, a budget, and expectations."],
-  ["Synergy Workshop", "You spend three hours putting sticky notes into quadrants."],
-  ["Quiet Resignation", "Your most capable teammate resigned and left a folder called 'final_final_v7'."],
-  ["Budget Weather", "Finance has forecast a 4% chance of spending any money."],
-  ["Password Expired", "Your password expired during a presentation. Security is delighted."],
-  ["All Hands", "The company announces excellent results and asks everyone to be prudent."],
-  ["Offsite Logistics", "The team building venue is two hours away and somehow mandatory."],
-  ["Priority Reversal", "Yesterday's top priority is now 'nice to have'."],
-  ["The Recognition Post", "A public thank-you names everyone except the people who did the work."],
-  ["Procurement Odyssey", "You need approval from five departments to buy a cable."],
-  ["Performance Calibration", "Managers are comparing employees to a bell curve they do not understand."],
-  ["Vendor Lunch", "A vendor promises to transform your workflow after a steak lunch."],
-  ["Open Office Acoustics", "A sales call, a birthday, and a crisis meeting are happening within four meters."],
-  ["Reorg Rumor", "The org chart is being edited at midnight. Nobody will say why."],
-  ["Innovation Sprint", "You must innovate by Friday using a template from last year."],
-  ["Manager's Favorite", "A colleague has an idea identical to yours, now with executive sponsorship."],
-  ["Compliance Reminder", "A compliance module is due today and takes exactly as long as your patience."],
-  ["Town Hall Question", "The CEO asks for questions, then selects one about the office snacks."],
-  ["Remote Work Exception", "The policy has an exception process designed to discourage exceptions."],
-  ["Spreadsheet Ownership", "A critical spreadsheet has no owner, no documentation, and 14 hidden tabs."],
-  ["Quarter-End Heroics", "Everything is urgent because the calendar is about to change."],
-  ["New Manager Energy", "Your new manager wants to meet everyone weekly to 'build trust'."],
-  ["Visibility Project", "You are offered a visible project that has already failed twice."],
-  ["Office Politics", "Two leaders want mutually exclusive things by the same deadline."],
-  ["Holiday Blackout", "A vacation request meets a business-critical release window."],
-  ["Career Conversation", "Your manager asks where you see yourself, then checks their phone."],
-  ["Corporate Wellness", "A mindfulness webinar arrives between two crisis calls."],
-  ["The Escalation", "A minor issue has been escalated to people whose titles are longer than the issue."],
-] as const;
-
-const twists = [
-  ["You solve it before anyone notices.", { reputation: 4, energy: -2 }],
-  ["It becomes tomorrow's problem, as tradition demands.", { energy: 2, motivation: -1 }],
-  ["Your manager remembers your name in a good way.", { reputation: 3, influence: 2 }],
-  ["Finance notices the cost of your solution.", { savings: -2, reputation: -1 }],
-  ["An executive mistakes your work for leadership.", { influence: 4, health: -2 }],
-  ["The process wins. Nobody does.", { energy: -4, motivation: -3 }],
-  ["A coworker quietly saves the day with you.", { motivation: 3, reputation: 2 }],
-  ["A new stakeholder asks for a deck about it.", { energy: -3, influence: 1 }],
-  ["It reveals an unexpectedly useful contact.", { influence: 3, savings: 2 }],
-  ["You are praised in a meeting you were not invited to.", { reputation: 4, motivation: 2 }],
-] as const;
-
-export const EVENTS: CorporateEvent[] = situations.flatMap(([title, description], situationIndex) =>
-  twists.map(([twist, changes], twistIndex) => ({
-    id: `event-${situationIndex}-${twistIndex}`,
-    title,
-    description: `${description} ${twist}`,
-    category: ["Reality", "Gossip", "Leadership", "Operations"][situationIndex % 4],
-    changes,
-    rarity: twistIndex === 9 ? "legendary" : twistIndex > 6 ? "rare" : twistIndex > 3 ? "uncommon" : "common",
-  }))
-);
-
-export const TILE_NAMES = [
-  "Payday", "Meeting", "Coffee Machine", "Performance Review", "Office Politics", "Training", "HR", "Budget Freeze",
-  "Innovation", "Vacation", "Compliance", "Corporate Event", "Remote Work", "IT Incident", "Recognition", "Town Hall",
-  "Restructuring", "Team Building", "LinkedIn Recruiter", "Micromanagement", "Payroll", "Executive Visit", "Merger", "Mandatory Fun",
-  "New Manager", "Annual Review", "Random Opportunity", "Office Gossip", "Layoff Rumor", "Promotion Track", "Burnout Risk",
-  "Finance", "Project Launch", "Work Anniversary", "Strategy Day", "Customer Escalation", "Recruiting", "Return to Office",
-  "Benefits Portal", "Quarter Close", "Mentor Moment", "Desk Move", "Leadership Offsite", "Security Training", "Career Ladder",
-  "Office Snacks", "Vendor Demo", "Shadow IT", "Budget Committee", "All Hands", "Performance Plan", "Side Project",
-  "Holiday Party", "Company Values", "Emergency Release", "Union Chat", "Exit Interview", "Retirement"
-];
-
-export const STAT_META: Record<Stat, { label: string; icon: string; tone: string }> = {
-  salary: { label: "Salary", icon: "$", tone: "blue" },
-  savings: { label: "Savings", icon: "◈", tone: "green" },
-  health: { label: "Mental health", icon: "♥", tone: "pink" },
-  energy: { label: "Energy", icon: "ϟ", tone: "orange" },
-  motivation: { label: "Motivation", icon: "✦", tone: "yellow" },
-  reputation: { label: "Reputation", icon: "◎", tone: "violet" },
-  influence: { label: "Influence", icon: "♜", tone: "cyan" },
+const twists: Record<Locale, readonly (readonly [string, Changes])[]> = {
+  en: [["You solve it before anyone notices.", { reputation: 4, energy: -2 }], ["It becomes tomorrow's problem, as tradition demands.", { energy: 2, motivation: -1 }], ["Your manager remembers your name in a good way.", { reputation: 3, influence: 2 }], ["Finance notices the cost of your solution.", { savings: -2, reputation: -1 }], ["An executive mistakes your work for leadership.", { influence: 4, health: -2 }], ["The process wins. Nobody does.", { energy: -4, motivation: -3 }], ["A coworker quietly saves the day with you.", { motivation: 3, reputation: 2 }], ["A new stakeholder asks for a deck about it.", { energy: -3, influence: 1 }], ["It reveals an unexpectedly useful contact.", { influence: 3, savings: 2 }], ["You are praised in a meeting you were not invited to.", { reputation: 4, motivation: 2 }]],
+  "es-AR": [["Lo resolvés antes de que alguien lo note.", { reputation: 4, energy: -2 }], ["Pasa a ser problema de mañana, como indica la tradición.", { energy: 2, motivation: -1 }], ["Tu manager recuerda tu nombre en un buen contexto.", { reputation: 3, influence: 2 }], ["Finanzas detecta el costo de tu solución.", { savings: -2, reputation: -1 }], ["Un ejecutivo confunde tu trabajo con liderazgo.", { influence: 4, health: -2 }], ["Gana el proceso. No gana nadie.", { energy: -4, motivation: -3 }], ["Un colega salva el día con vos, discretamente.", { motivation: 3, reputation: 2 }], ["Un nuevo stakeholder pide una presentación sobre el tema.", { energy: -3, influence: 1 }], ["Aparece un contacto inesperadamente útil.", { influence: 3, savings: 2 }], ["Te felicitan en una reunión a la que no te invitaron.", { reputation: 4, motivation: 2 }]],
 };
+
+const tiles: Record<Locale, string[]> = {
+  en: ["Payday", "Meeting", "Coffee Machine", "Performance Review", "Office Politics", "Training", "HR", "Budget Freeze", "Innovation", "Vacation", "Compliance", "Corporate Event", "Remote Work", "IT Incident", "Recognition", "Town Hall", "Restructuring", "Team Building", "LinkedIn Recruiter", "Micromanagement", "Payroll", "Executive Visit", "Merger", "Mandatory Fun", "New Manager", "Annual Review", "Random Opportunity", "Office Gossip", "Layoff Rumor", "Promotion Track", "Burnout Risk", "Finance", "Project Launch", "Work Anniversary", "Strategy Day", "Customer Escalation", "Recruiting", "Return to Office", "Benefits Portal", "Quarter Close", "Mentor Moment", "Desk Move", "Leadership Offsite", "Security Training", "Career Ladder", "Office Snacks", "Vendor Demo", "Shadow IT", "Budget Committee", "All Hands", "Performance Plan", "Side Project", "Holiday Party", "Company Values", "Emergency Release", "Union Chat", "Exit Interview", "Retirement"],
+  "es-AR": ["Cobro", "Reunión", "Cafetera", "Evaluación", "Política de oficina", "Capacitación", "RR. HH.", "Freeze de presupuesto", "Innovación", "Vacaciones", "Compliance", "Evento corporativo", "Home office", "Incidente de IT", "Reconocimiento", "Town hall", "Reestructuración", "Team building", "Reclutador de LinkedIn", "Micromanagement", "Liquidación", "Visita ejecutiva", "Fusión", "Diversión obligatoria", "Manager nuevo", "Revisión anual", "Oportunidad aleatoria", "Chisme de oficina", "Rumor de despidos", "Ruta de ascenso", "Riesgo de burnout", "Finanzas", "Lanzamiento", "Aniversario laboral", "Día de estrategia", "Escalamiento de cliente", "Selección", "Vuelta a la oficina", "Portal de beneficios", "Cierre de trimestre", "Momento de mentoría", "Mudanza de escritorio", "Offsite de liderazgo", "Capacitación de seguridad", "Plan de carrera", "Snacks de oficina", "Demo de proveedor", "Shadow IT", "Comité de presupuesto", "All hands", "Plan de mejora", "Proyecto paralelo", "Fiesta de fin de año", "Valores corporativos", "Release de emergencia", "Chat sindical", "Entrevista de salida", "Jubilación"],
+};
+
+const labels: Record<Locale, Record<Stat, string>> = {
+  en: { salary: "Salary", savings: "Savings", health: "Mental health", energy: "Energy", motivation: "Motivation", reputation: "Reputation", influence: "Influence" },
+  "es-AR": { salary: "Sueldo", savings: "Ahorros", health: "Salud mental", energy: "Energía", motivation: "Motivación", reputation: "Reputación", influence: "Influencia" },
+};
+
+export const copy = {
+  en: { localeName: "English", localeHint: "Global corporate reality", subtitle: "Career survival simulator", year: "YEAR", employee: "EMPLOYEE", junior: "Junior Employee", manager: "Middle Manager", employed: "Still employed, technically", retired: "Retirement unlocked", leave: "On medical leave", kit: "OFFICE SURVIVAL KIT", emptyKit: "No ergonomic chair. No mentor. Just vibes.", current: "CURRENT SITUATION", escaped: "You escaped with enough savings and sanity. The farewell cake is dry but sincere.", burnout: "Your wellness webinar has been scheduled for after you recover.", prompt: "Roll deliberately. The spreadsheet has a memory.", roll: "Roll the die", rolling: "Rolling…", nextTurn: "Next turn", pulse: "CORPORATE PULSE", consequences: "Live consequences", reset: "Reset", odds: "RETIREMENT ODDS", oddsHint: "Maintain health and save enough to leave on your terms.", card: "CARD", accept: "Accept your fate", neutral: "a suspiciously neutral outcome", passedYear: "A year passed. Payroll continues to recognize your existence.", landed: "You landed on", startLog: "Day one. Your laptop is already installing updates.", chooseTitle: "Choose your reality", chooseDescription: "Corporate survival has regional settings. Pick one to begin.", start: "Start surviving", language: "Language", rarities: { common: "common", uncommon: "uncommon", rare: "rare", legendary: "legendary" } },
+  "es-AR": { localeName: "Español (Argentina)", localeHint: "Supervivencia corporativa local", subtitle: "Simulador de supervivencia corporativa", year: "AÑO", employee: "LEGAJO", junior: "Empleado/a junior", manager: "Manager intermedio", employed: "Seguís en nómina, técnicamente", retired: "Jubilación desbloqueada", leave: "Con licencia médica", kit: "KIT DE SUPERVIVENCIA", emptyKit: "Sin silla ergonómica. Sin mentor. Puro aguante.", current: "SITUACIÓN ACTUAL", escaped: "Escapaste con ahorros y algo de cordura. La torta de despedida está seca, pero es sincera.", burnout: "Tu webinar de bienestar fue agendado para después de recuperarte.", prompt: "Tirá con cuidado. La planilla tiene memoria.", roll: "Tirar el dado", rolling: "Tirando…", nextTurn: "Siguiente turno", pulse: "PULSO CORPORATIVO", consequences: "Consecuencias en vivo", reset: "Reiniciar", odds: "CHANCES DE JUBILARTE", oddsHint: "Cuidá tu salud y ahorrá lo suficiente para irte por decisión propia.", card: "CARTA", accept: "Aceptar el destino", neutral: "un resultado sospechosamente neutral", passedYear: "Pasó un año. Liquidación todavía reconoce tu existencia.", landed: "Caíste en", startLog: "Primer día. Tu notebook ya está instalando actualizaciones.", chooseTitle: "Elegí tu realidad", chooseDescription: "La supervivencia corporativa tiene configuración regional. Elegí para empezar.", start: "Empezar a sobrevivir", language: "Idioma", rarities: { common: "común", uncommon: "poco común", rare: "rara", legendary: "legendaria" } },
+} as const;
+
+const eventChoices: Record<Locale, Record<string, Omit<CorporateEvent, "id" | "rarity">>> = {
+  en: { "Mandatory Fun": { title: "Mandatory fun, allegedly", category: "Culture", description: "Your manager asks whether you can stay until 10 PM for a culture-building event.", changes: {}, choices: [{ label: "Accept with a smile", consequence: "You learned three colleagues' karaoke choices.", changes: { reputation: 3, health: -5, energy: -7 } }, { label: "Decline politely", consequence: "Your boundary has been observed and archived.", changes: { health: 3, motivation: 2, reputation: -2 } }, { label: "Invent a compelling excuse", consequence: "The excuse holds. Your conscience does not.", changes: { energy: 3, reputation: -1, influence: 1 } }] }, "Promotion Track": { title: "A chair with more meetings", category: "Career", description: "Your manager offers you a promotion. The title is longer; the calendar is fuller.", changes: {}, choices: [{ label: "Take the promotion", consequence: "Congratulations. The expectations are now abstract and infinite.", changes: { salary: 12, influence: 8, health: -9, energy: -6 }, tag: "promoted" }, { label: "Stay hands-on", consequence: "You retain your evenings and gain a mysterious reputation for balance.", changes: { health: 4, motivation: 3, reputation: 1 } }] }, "Vacation": { title: "Vacation request", category: "Balance", description: "A holiday is possible, but the team is in a very important phase. Again.", changes: {}, choices: [{ label: "Book it", consequence: "The out-of-office message feels almost revolutionary.", changes: { health: 12, energy: 14, motivation: 7, reputation: -2 } }, { label: "Postpone it", consequence: "The business appreciates your sacrifice for roughly four seconds.", changes: { reputation: 4, health: -7, energy: -5 } }] } },
+  "es-AR": { "Diversión obligatoria": { title: "Diversión obligatoria, supuestamente", category: "Cultura", description: "Tu manager pregunta si podés quedarte hasta las 22 para un evento de cultura.", changes: {}, choices: [{ label: "Aceptar con una sonrisa", consequence: "Aprendiste las canciones de karaoke de tres colegas.", changes: { reputation: 3, health: -5, energy: -7 } }, { label: "Declinar con respeto", consequence: "Tu límite fue observado y archivado.", changes: { health: 3, motivation: 2, reputation: -2 } }, { label: "Inventar una excusa", consequence: "La excusa funciona. Tu conciencia, no tanto.", changes: { energy: 3, reputation: -1, influence: 1 } }] }, "Ruta de ascenso": { title: "Una silla con más reuniones", category: "Carrera", description: "Tu manager te ofrece un ascenso. El cargo es más largo; el calendario, más lleno.", changes: {}, choices: [{ label: "Aceptar el ascenso", consequence: "Felicitaciones. Las expectativas ahora son abstractas e infinitas.", changes: { salary: 12, influence: 8, health: -9, energy: -6 }, tag: "promoted" }, { label: "Seguir en lo técnico", consequence: "Conservás las noches y ganás una reputación misteriosa de equilibrio.", changes: { health: 4, motivation: 3, reputation: 1 } }] }, "Vacaciones": { title: "Pedido de vacaciones", category: "Equilibrio", description: "Podrías tomarte vacaciones, pero el equipo está en una etapa muy importante. De nuevo.", changes: {}, choices: [{ label: "Reservarlas", consequence: "El mensaje de fuera de oficina se siente casi revolucionario.", changes: { health: 12, energy: 14, motivation: 7, reputation: -2 } }, { label: "Postergarlas", consequence: "El negocio aprecia tu sacrificio durante cuatro segundos.", changes: { reputation: 4, health: -7, energy: -5 } }] } },
+};
+
+export function getGameData(locale: Locale) {
+  const stats = (Object.keys(labels[locale]) as Stat[]).reduce((result, key) => ({ ...result, [key]: { label: labels[locale][key], icon: { salary: "$", savings: "◈", health: "♥", energy: "ϟ", motivation: "✦", reputation: "◎", influence: "♜" }[key], tone: { salary: "blue", savings: "green", health: "pink", energy: "orange", motivation: "yellow", reputation: "violet", influence: "cyan" }[key] } }), {} as Record<Stat, { label: string; icon: string; tone: string }>);
+  const events = situations[locale].flatMap(([title, description], situationIndex) => twists[locale].map(([twist, changes], twistIndex) => ({ id: `event-${locale}-${situationIndex}-${twistIndex}`, title, description: `${description} ${twist}`, category: locale === "es-AR" ? ["Realidad", "Chisme", "Liderazgo", "Operaciones"][situationIndex % 4] : ["Reality", "Gossip", "Leadership", "Operations"][situationIndex % 4], changes, rarity: twistIndex === 9 ? "legendary" as const : twistIndex > 6 ? "rare" as const : twistIndex > 3 ? "uncommon" as const : "common" as const })));
+  return { tiles: tiles[locale], stats, events, choices: eventChoices[locale], text: copy[locale] };
+}
