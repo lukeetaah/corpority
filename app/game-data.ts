@@ -2,7 +2,7 @@ export type Locale = "es-AR" | "en";
 export type Stat = "salary" | "health" | "reputation" | "energy" | "motivation" | "influence" | "savings";
 export type Changes = Partial<Record<Stat, number>>;
 
-export type Choice = { label: string; consequence: string; changes: Changes; tag?: string };
+export type Choice = { label: string; consequence: string; changes: Changes; tag?: string; skipTurns?: number; item?: string };
 export type CorporateEvent = { id: string; title: string; description: string; category: string; changes: Changes; choices?: Choice[]; rarity: "common" | "uncommon" | "rare" | "legendary" };
 type Situation = readonly [string, string];
 
