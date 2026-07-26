@@ -7,12 +7,14 @@ type RiskKey = "reputation" | "influence" | "energy" | "savings";
 type PendingConsequence = { turns: number; title: string; message: string; changes: Changes; origin?: string };
 type Game = { position: number; year: number; turn: number; stats: Record<Stat, number>; items: string[]; flags: string[]; log: string[]; skippedTurns: number; seenEventIds: string[]; recentEventTitles: string[]; pending: PendingConsequence[]; riskWarnings: Record<RiskKey, number>; riskCooldown: number; ended?: "won" | "burnout" };
 type Resolution = { title: string; message: string; changes: Changes; skippedTurns?: number; item?: string; state: string };
+type BusyTask = { kind: "reconcile" | "tickets" | "approvals"; event: CorporateEvent };
 type TeamMate = { name: string; role: string; tenure: string; rank: number; reputation: number; favor: number; note: string; tone: string };
 type ScenarioKey = "meeting" | "incident" | "reorg" | "leadership" | "social" | "fun" | "workload" | "credit" | "systems" | "review" | "politics" | "boundary" | "wellbeing" | "life";
 const SAVE_KEY = "corpority-save-v1";
 const LANGUAGE_KEY = "corpority-language-v1";
 const BRIEFING_KEY = "corpority-briefing-v2";
 const CAREER_YEARS = 8;
+const TASK_TILES = [6, 7, 10, 20, 31, 39, 48, 50];
 const clamp = (value: number) => Math.max(0, Math.min(100, value));
 const pick = <T,>(items: readonly T[]) => items[Math.floor(Math.random() * items.length)];
 
@@ -68,6 +70,15 @@ function riskEventFor(game: Game, locale: Locale): { key: RiskKey; event: Corpor
   }
   if (game.stats.savings <= 10) return { key: "savings", event: { id: "risk-savings", title: es ? "Margen financiero mínimo" : "No financial margin", category: es ? "Vida personal" : "Personal life", rarity: "uncommon", description: es ? "Tus ahorros están tan bajos que un gasto chico ya condiciona cómo trabajás. No es mala administración: es no tener margen para que algo salga mal." : "Your savings are so low that a small expense now affects how you work. It is not bad management: it is having no room for anything to go wrong.", changes: {}, choices: [{ label: es ? "Tomar trabajo extra" : "Take extra work", consequence: es ? "Entrás plata rápido. También perdés el descanso que te sostenía." : "Money arrives quickly. So does the loss of rest that was holding you together.", changes: { savings: 5, energy: -3, health: -1 } }, { label: es ? "Recortar un plan personal" : "Cut a personal plan", consequence: es ? "Evitás la urgencia financiera, pero cedés algo que esperabas hace tiempo." : "You avoid the financial emergency, but give up something you had been looking forward to.", changes: { savings: 3, motivation: -3 } }, { label: es ? "Postergar el pago" : "Delay the payment", consequence: es ? "Ganás unos días. El costo vuelve cuando ya no podés elegir tanto." : "You gain a few days. The cost returns when you have less choice.", changes: { motivation: -1 }, delayed: { turns: 2, title: es ? "Pago vencido" : "Overdue payment", message: es ? "Postergaste el gasto para sobrevivir el momento. Ahora vence con un recargo y te obliga a reorganizar todo." : "You delayed the expense to survive the moment. Now it returns with a late fee and forces you to reorganize everything.", changes: { savings: -6, energy: -1 } } }] } };
   return null;
+}
+function taskMeta(task: BusyTask, locale: Locale) {
+  const es = locale === "es-AR";
+  const meta = {
+    reconcile: { title: es ? "Conciliación de movimientos" : "Transaction reconciliation", description: es ? "Verificá cada movimiento. El sistema no permite procesar por lote porque alguien disfrutó diseñándolo así." : "Verify every transaction. The system does not allow batch processing because someone enjoyed designing it this way.", action: es ? "Validar fila" : "Validate row", done: es ? "Conciliación enviada" : "Reconciliation submitted", rows: ["FAC-104", "NC-077", "OP-312", "RET-019", "AJ-205"] },
+    tickets: { title: es ? "Clasificación manual de tickets" : "Manual ticket classification", description: es ? "Asigná cada ticket al flujo correcto. Todos podrían haberse resuelto con un campo obligatorio." : "Route each ticket to the right queue. All of them could have been solved with one required field.", action: es ? "Clasificar" : "Classify", done: es ? "Tickets clasificados" : "Tickets classified", rows: ["REQ-1903", "REQ-1907", "REQ-1911", "REQ-1918", "REQ-1920"] },
+    approvals: { title: es ? "Cadena de aprobaciones" : "Approval chain", description: es ? "Confirmá que revisaste cada aprobación. No revisaste nada, pero el checkbox necesita afecto." : "Confirm every approval was reviewed. You reviewed nothing, but the checkbox needs affection.", action: es ? "Aprobar" : "Approve", done: es ? "Aprobaciones registradas" : "Approvals recorded", rows: ["BUD-220", "BUD-224", "BUD-231", "BUD-238", "BUD-241"] },
+  };
+  return meta[task.kind];
 }
 
 const scenarioGroups: ScenarioKey[] = ["meeting", "incident", "reorg", "leadership", "leadership", "social", "fun", "workload", "workload", "meeting", "credit", "reorg", "incident", "fun", "social", "workload", "credit", "systems", "review", "social", "social", "reorg", "leadership", "credit", "incident", "meeting", "boundary", "systems", "workload", "meeting", "credit", "politics", "boundary", "review", "wellbeing", "politics", "life", "life", "life", "life", "life", "life", "life", "life", "life", "life", "life", "life"];
@@ -174,6 +185,8 @@ export default function Home() {
   const [locale, setLocale] = useState<Locale | null>(null);
   const [game, setGame] = useState<Game>(createGame("en"));
   const [activeEvent, setActiveEvent] = useState<CorporateEvent | null>(null);
+  const [activeTask, setActiveTask] = useState<BusyTask | null>(null);
+  const [taskRows, setTaskRows] = useState<number[]>([]);
   const [dicePush, setDicePush] = useState<number | null>(null);
   const [rolling, setRolling] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -234,9 +247,34 @@ export default function Home() {
     setActiveEvent(null);
     window.setTimeout(() => setResolution(null), 4200);
   }
+  function completeTask() {
+    if (!activeTask) return;
+    const meta = taskMeta(activeTask, locale ?? "en");
+    const changes: Changes = { reputation: 1, energy: -1 };
+    const state = Object.entries(changes).map(([key, value]) => `${stats[key as Stat].label} ${clamp(game.stats[key as Stat] + value!)} (${value! > 0 ? "+" : ""}${value})`).join(" · ");
+    const message = isSpanish ? "Terminaste una tarea repetitiva que nadie quería hacer. Quedó asentado que colaboraste." : "You finished a repetitive task nobody wanted. Your cooperation was recorded.";
+    apply(changes, message);
+    setResolution({ title: meta.done, message, changes, state });
+    const event = activeTask.event;
+    setActiveTask(null); setTaskRows([]);
+    window.setTimeout(() => setActiveEvent(event), 250);
+    window.setTimeout(() => setResolution(null), 4200);
+  }
+  function skipTask() {
+    if (!activeTask) return;
+    const changes: Changes = { reputation: -2, energy: 1 };
+    const state = Object.entries(changes).map(([key, value]) => `${stats[key as Stat].label} ${clamp(game.stats[key as Stat] + value!)} (${value! > 0 ? "+" : ""}${value})`).join(" · ");
+    const message = isSpanish ? "Dejaste la tarea administrativa para otra persona. Alguien lo anotó." : "You left the administrative task for someone else. Someone noted it.";
+    apply(changes, message);
+    setResolution({ title: isSpanish ? "Tarea omitida" : "Task skipped", message, changes, state });
+    const event = activeTask.event;
+    setActiveTask(null); setTaskRows([]);
+    window.setTimeout(() => setActiveEvent(event), 250);
+    window.setTimeout(() => setResolution(null), 4200);
+  }
   function optionsFor(event: CorporateEvent): Choice[] { return event.choices ?? choicesForScenario(locale ?? "en", event); }
   function roll() {
-    if (rolling || activeEvent || game.ended || !locale) return;
+    if (rolling || activeEvent || activeTask || game.ended || !locale) return;
     const due = game.pending.find(consequence => consequence.turns <= 0);
     if (due) {
       setGame(current => ({ ...current, pending: current.pending.filter(consequence => consequence !== due) }));
@@ -260,10 +298,16 @@ export default function Home() {
       const designed = choices[landed]; const relevantEvents = events.filter(event => scenarioForEvent(event) === tileScenarioGroups[newPosition]); const unseen = relevantEvents.filter(event => !game.seenEventIds.includes(event.id) && !game.recentEventTitles.includes(event.title)); const event = designed ? { ...designed, id: `choice-${locale}-${landed}`, rarity: "uncommon" as const } : pick(unseen.length ? unseen : relevantEvents.length ? relevantEvents : events);
       setGame(current => ({ ...current, position: newPosition, year: current.year + (crossedYear ? 1 : 0), turn: current.turn + 1, riskCooldown: Math.max(0, current.riskCooldown - 1), pending: current.pending.map(consequence => ({ ...consequence, turns: consequence.turns - 1 })), seenEventIds: [...current.seenEventIds, event.id].slice(-180), recentEventTitles: [...current.recentEventTitles, event.title].slice(-5), stats: { ...current.stats, savings: clamp(current.stats.savings + (crossedYear ? 5 : 0)), salary: clamp(current.stats.salary + (crossedYear ? 2 : 0)) }, log: [crossedYear ? text.passedYear : `${text.landed} ${landed}.`, ...current.log].slice(0, 5) }));
       window.setTimeout(() => setDicePush(null), 1960);
-      window.setTimeout(() => setActiveEvent(event), 1750);
+      window.setTimeout(() => {
+        if (TASK_TILES.includes(newPosition)) {
+          const taskKinds: BusyTask["kind"][] = ["reconcile", "tickets", "approvals"];
+          setTaskRows([]);
+          setActiveTask({ kind: taskKinds[(newPosition + game.turn) % taskKinds.length], event });
+        } else setActiveEvent(event);
+      }, 1750);
     }, 520);
   }
-  function restart() { if (!locale) return; localStorage.removeItem(SAVE_KEY); setGame(createGame(locale)); setActiveEvent(null); setDicePush(null); }
+  function restart() { if (!locale) return; localStorage.removeItem(SAVE_KEY); setGame(createGame(locale)); setActiveEvent(null); setActiveTask(null); setTaskRows([]); setDicePush(null); }
   function closeSession(save: boolean) {
     if (!locale) return;
     if (save) localStorage.setItem(SAVE_KEY, JSON.stringify(game));
@@ -286,5 +330,6 @@ export default function Home() {
     {showExitConfirm && <div className="modal-backdrop"><article className="exit-card"><span className="eyebrow">{isSpanish ? "VENTANA DE JUEGO" : "GAME WINDOW"}</span><h2>{isSpanish ? "¿Querés guardar antes de salir?" : "Save before you leave?"}</h2><p>{isSpanish ? "Si cerrás sin guardar, ese ascenso injusto, ese burnout evitado y esa charla incómoda se pierden. Como si nunca hubieran pasado." : "If you close without saving, that unfair promotion, avoided burnout, and difficult conversation disappear. As if they never happened."}</p><div><button className="continue" onClick={() => closeSession(true)}>{isSpanish ? "Guardar y cerrar" : "Save and close"}<span>→</span></button><button className="discard" onClick={() => closeSession(false)}>{isSpanish ? "Cerrar sin guardar" : "Close without saving"}</button><button className="cancel-close" onClick={() => setShowExitConfirm(false)}>{isSpanish ? "Cancelar" : "Cancel"}</button></div></article></div>}
     {showBriefing && <div className="modal-backdrop language-backdrop"><article className="briefing-card"><span className="eyebrow">{isSpanish ? "TU PRIMER DÍA" : "YOUR FIRST DAY"}</span><h2>{isSpanish ? "No arrancás de cero. Arrancás último." : "You are not starting from zero. You are starting last."}</h2><p>{isSpanish ? "Sos junior en un equipo que ya tiene alianzas, historia y gente protegida. No todo ascenso es mérito; no toda mala reputación castiga." : "You are a junior in a team with alliances, history, and protected people. Not every promotion is merit; not every bad reputation is punished."}</p><div className="briefing-team">{team.slice(0, 3).map(member => <div key={member.name}><b>{member.name}</b><span>{member.role} · {member.tenure}</span><em>{isSpanish ? "rango" : "rank"} {member.rank} · {isSpanish ? "favor" : "favor"} {member.favor}</em></div>)}</div><button className="continue" onClick={closeBriefing}>{isSpanish ? "Entiendo. Empecemos." : "I understand. Let's begin."}<span>→</span></button></article></div>}
     {(!locale || showLanguagePicker) && <div className="modal-backdrop language-backdrop"><article className="language-card"><span className="eyebrow">CORPORITY</span><h2>{text.chooseTitle}</h2><p>{text.chooseDescription}</p><div className="language-options"><button onClick={() => chooseLanguage("es-AR")}><b>Español (Argentina)</b><span>ARS · home office · mates · aguante corporativo</span><em>{text.start} →</em></button><button onClick={() => chooseLanguage("en")}><b>English</b><span>Global office politics · meetings · career survival</span><em>{text.start} →</em></button></div></article></div>}
+    {activeTask && <div className="modal-backdrop task-backdrop"><article className="event-card task-card"><div className="event-top"><span>{isSpanish ? "CONSOLA DE BACKOFFICE" : "BACKOFFICE CONSOLE"}</span><em className="uncommon">{isSpanish ? "requerido" : "required"}</em></div><h2>{taskMeta(activeTask, locale ?? "en").title}</h2><p>{taskMeta(activeTask, locale ?? "en").description}</p><div className="task-rows">{taskMeta(activeTask, locale ?? "en").rows.map((row, index) => <button key={row} className={taskRows.includes(index) ? "done" : ""} onClick={() => setTaskRows(current => current.includes(index) ? current : [...current, index])}><span>{row}</span><b>{taskRows.includes(index) ? (isSpanish ? "Validado" : "Validated") : taskMeta(activeTask, locale ?? "en").action}</b></button>)}</div><button className="continue" disabled={taskRows.length < taskMeta(activeTask, locale ?? "en").rows.length} onClick={completeTask}>{taskMeta(activeTask, locale ?? "en").done}<span>{taskRows.length}/{taskMeta(activeTask, locale ?? "en").rows.length}</span></button><button className="task-skip" onClick={skipTask}>{isSpanish ? "Omitir y asumir el costo: -2 Reputación" : "Skip and take the cost: -2 Reputation"}</button></article></div>}
   </main>;
 }
