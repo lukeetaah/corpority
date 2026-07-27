@@ -20,7 +20,58 @@ const clamp = (value: number) => Math.max(0, Math.min(100, value));
 const pick = <T,>(items: readonly T[]) => items[Math.floor(Math.random() * items.length)];
 
 function createGame(locale: Locale): Game {
-  return { position: 0, year: 1, turn: 1, stats: { salary: 38, savings: 14, health: 76, energy: 72, motivation: 68, reputation: 18, influence: 4 }, items: [], flags: [], skippedTurns: 0, seenEventIds: [], recentEventTitles: [], pending: [], riskWarnings: { salary: 0, savings: 0, health: 0, energy: 0, motivation: 0, reputation: 0, influence: 0 }, riskCooldown: 0, log: [getGameData(locale).text.startLog] };
+  return { position: 0, year: 1, turn: 1, stats: { salary: 38, savings: 14, health: 52, energy: 55, motivation: 48, reputation: 20, influence: 5 }, items: [], flags: [], skippedTurns: 0, seenEventIds: [], recentEventTitles: [], pending: [], riskWarnings: { salary: 0, savings: 0, health: 0, energy: 0, motivation: 0, reputation: 0, influence: 0 }, riskCooldown: 0, log: [getGameData(locale).text.startLog] };
+}
+
+/** Ambient stress: random environmental drains that simulate life hitting you */
+function ambientStress(year: number, stats: Record<Stat, number>): Changes {
+  const roll = Math.random();
+  // ~30% of turns: nothing happens
+  if (roll < 0.30) return {};
+  // ~35% of turns: mild ambient stress
+  if (roll < 0.65) {
+    const drains: Changes[] = [
+      { health: -2 },
+      { energy: -2 },
+      { motivation: -1 },
+      { health: -1, energy: -1 },
+      { motivation: -2, health: -1 },
+    ];
+    return drains[Math.floor(Math.random() * drains.length)];
+  }
+  // ~20% of turns: moderate stress (worse in later years)
+  if (roll < 0.85) {
+    const intensity = year >= 5 ? 2 : 1;
+    const drains: Changes[] = [
+      { health: -3 * intensity, energy: -1 },
+      { energy: -2 * intensity, motivation: -1 },
+      { health: -2, motivation: -2 * intensity },
+      { health: -1, energy: -2, savings: -1 },
+    ];
+    return drains[Math.floor(Math.random() * drains.length)];
+  }
+  // ~15% of turns: something good happens (partial recovery moment)
+  if (stats.health < 40 || stats.energy < 30) {
+    // When you're low, life gives you small breathers
+    return { health: Math.min(4, Math.max(1, 40 - stats.health)), energy: 1 };
+  }
+  return { motivation: 1 };
+}
+
+/** Passive recovery: when critically low, your body/mind forces small recovery */
+function passiveRecovery(stats: Record<Stat, number>): Changes {
+  const changes: Changes = {};
+  if (stats.health <= 25 && stats.health > 0) changes.health = 2;
+  if (stats.energy <= 15 && stats.energy > 0) changes.energy = 1;
+  if (stats.motivation <= 12) changes.motivation = 1;
+  return changes;
+}
+
+/** Year-scaled passive drain */
+function yearDrain(year: number): Changes {
+  if (year <= 2) return { health: -1 };
+  if (year <= 4) return { health: -1, energy: -1 };
+  return { health: -2, energy: -1 };
 }
 
 function teamFor(locale: Locale): TeamMate[] {
@@ -77,8 +128,9 @@ function riskEventFor(game: Game, locale: Locale): { key: RiskKey; event: Corpor
       description: es ? "Llegaste a tu límite físico. Se te pasó un detalle en el trabajo porque venís funcionando sin descanso. Hay que decidir qué hacer ahora." : "You hit physical limits. A detail slipped because you worked without rest. Decide what to do now.",
       changes: {},
       choices: [
-        { label: es ? "Pedir el día para descansar" : "Take the day off to rest", consequence: es ? "Frenás a tiempo. El equipo cubre tu puesto por hoy, perdés un turno pero recuperás energía." : "You stop in time. The team covers for today, losing a turn but regaining energy.", changes: { energy: 12, health: 7, reputation: -1 }, skipTurns: 1 },
-        { label: es ? "Corregirlo esta noche a pura fuerza" : "Fix it tonight with sheer willpower", consequence: es ? "Lográs entregar todo a tiempo, pero tu cansancio es evidente ante tus superiores." : "You deliver on time, but your severe fatigue is obvious to management.", changes: { reputation: -3, health: -5, energy: -1 } }
+        { label: es ? "Pedir el día para descansar" : "Take the day off to rest", consequence: es ? "Frenás a tiempo. El equipo cubre tu puesto por hoy, perdés un turno pero recuperás energía." : "You stop in time. The team covers for today, losing a turn but regaining energy.", changes: { energy: 14, health: 10, reputation: -2 }, skipTurns: 1 },
+        { label: es ? "Corregirlo esta noche a pura fuerza" : "Fix it tonight with sheer willpower", consequence: es ? "Lográs entregar todo a tiempo, pero tu cansancio es evidente ante tus superiores." : "You deliver on time, but your severe fatigue is obvious to management.", changes: { reputation: 4, health: -8, energy: -6 } },
+        { label: es ? "Explicar serenamente la carga imposible" : "Explain calmly the impossible load", consequence: es ? "Exponés la falta de descanso. El jefe lo anota pero salvas tu cabeza." : "You expose the overload. Boss notes it but your mind gets relief.", changes: { health: 6, reputation: -3, influence: 2 } }
       ]
     }
   };
@@ -93,8 +145,9 @@ function riskEventFor(game: Game, locale: Locale): { key: RiskKey; event: Corpor
       description: es ? "Tu salud mental está en zona crítica. Estar tanto tiempo bajo presión afectó tu paciencia y concentración en las reuniones." : "Your mental health is in the red. Staying under constant pressure has severely drained your patience.",
       changes: {},
       choices: [
-        { label: es ? "Desconectarte por un turno" : "Disconnect for one turn", consequence: es ? "Parás la pelota antes de quemarte por completo. Recuperás aire fresco." : "You take a pause before complete burnout. Fresh air restored.", changes: { health: 12, energy: 8, reputation: -2 }, skipTurns: 1 },
-        { label: es ? "Ir a la reunión igual" : "Go to the meeting anyway", consequence: es ? "Asistís pero se nota tu malestar. Dejás una impresión tensa." : "You attend but your stress is obvious. Leaves a tense impression.", changes: { health: -4, energy: -3, reputation: -2 } }
+        { label: es ? "Desconectarte por un turno" : "Disconnect for one turn", consequence: es ? "Parás la pelota antes de quemarte por completo. Recuperás aire fresco." : "You take a pause before complete burnout. Fresh air restored.", changes: { health: 16, energy: 10, reputation: -3 }, skipTurns: 1 },
+        { label: es ? "Pedir reordenar tus entregas" : "Ask to reprioritize deliverables", consequence: es ? "Negociás espacio. Ganás tranquilidad sacrificando algo de imagen." : "You negotiate space. Protects sanity at cost of approval.", changes: { health: 9, reputation: -4, influence: 2 } },
+        { label: es ? "Empujar la reunión a pura fuerza" : "Push through the meeting", consequence: es ? "Asistís pero se nota tu malestar. Dejás una impresión tensa." : "You attend but your stress is obvious. Leaves a tense impression.", changes: { health: -6, energy: -5, reputation: 2 } }
       ]
     }
   };
@@ -109,8 +162,9 @@ function riskEventFor(game: Game, locale: Locale): { key: RiskKey; event: Corpor
       description: es ? "Se nota que perdiste el entusiasmo. Te cuesta arrancar la jornada y tus compañeros lo perciben." : "It shows that you lost enthusiasm. Starting the day takes extra effort.",
       changes: {},
       choices: [
-        { label: es ? "Hablar con tu equipo y pedir aire" : "Talk with your team for space", consequence: es ? "Expresás lo que sentís y recuperás algo de control sobre tus tareas." : "You express your feelings and regain control over your tasks.", changes: { motivation: 5, influence: 1, reputation: -1 } },
-        { label: es ? "Seguir en piloto automático" : "Stay on autopilot", consequence: es ? "Cumplís lo mínimo indispensable para salir del paso." : "You do the bare minimum to get through the day.", changes: { reputation: -1, influence: -2, motivation: -2 } }
+        { label: es ? "Hablar con tu equipo y pedir aire" : "Talk with your team for space", consequence: es ? "Expresás lo que sentís y recuperás algo de control sobre tus tareas." : "You express your feelings and regain control over your tasks.", changes: { motivation: 8, health: 5, reputation: -2 } },
+        { label: es ? "Tomarte una pausa breve para ordenar la cabeza" : "Take a quick break to clear mind", consequence: es ? "Te tomás 10 minutos para respirar y recuperar enfoque." : "You take 10 minutes to breathe and focus.", changes: { health: 6, motivation: 4, energy: -2 } },
+        { label: es ? "Seguir en piloto automático" : "Stay on autopilot", consequence: es ? "Cumplís lo mínimo indispensable para salir del paso." : "You do the bare minimum to get through the day.", changes: { reputation: -2, influence: -3, motivation: -4 } }
       ]
     }
   };
@@ -125,8 +179,9 @@ function riskEventFor(game: Game, locale: Locale): { key: RiskKey; event: Corpor
       description: es ? "Los gastos mensuales aumentaron y tu sueldo quedó desfasado. Te obliga a cuidar cada peso que gastás." : "Monthly expenses went up and your salary fell behind. Forces careful spending.",
       changes: {},
       choices: [
-        { label: es ? "Pedir una revisión de sueldo" : "Ask for a pay review", consequence: es ? "Planteás el tema con firmeza. Tu pedido queda registrado." : "You raise the issue firmly. Your request is registered.", changes: { influence: 1, reputation: 1, motivation: -1 } },
-        { label: es ? "Buscar una changa extra" : "Take extra side work", consequence: es ? "Consigués algo de dinero extra sacrificando tu fin de semana." : "You earn extra money by giving up your weekend rest.", changes: { savings: 4, energy: -3, health: -1 } }
+        { label: es ? "Pedir una revisión de sueldo" : "Ask for a pay review", consequence: es ? "Planteás el tema con firmeza. Tu pedido queda registrado." : "You raise the issue firmly. Your request is registered.", changes: { influence: 3, reputation: 2, health: -3 } },
+        { label: es ? "Buscar una changa extra" : "Take extra side work", consequence: es ? "Consigués algo de dinero extra sacrificando tu fin de semana." : "You earn extra money by giving up your weekend rest.", changes: { savings: 6, energy: -5, health: -4 } },
+        { label: es ? "Ajustar tus gastos personales" : "Trim personal budget", consequence: es ? "Recortás salidas para cuidar tus ahorros sin cargarte más trabajo." : "You trim outings to protect savings without adding extra work.", changes: { savings: 3, health: -2, motivation: -3 } }
       ]
     }
   };
@@ -141,8 +196,9 @@ function riskEventFor(game: Game, locale: Locale): { key: RiskKey; event: Corpor
       description: es ? "Tus últimas entregas dejaron dudas en tus superiores. Tus errores ahora se miran con más lupa." : "Recent deliverables raised questions with management. Mistakes get extra scrutiny.",
       changes: {},
       choices: [
-        { label: es ? "Pedir objetivos claros por escrito" : "Ask for clear goals in writing", consequence: es ? "Aclarás lo que esperan de vos y recuperás la confianza gradualmente." : "You clarify expectations and rebuild confidence step by step.", changes: { reputation: 2, energy: -2 } },
-        { label: es ? "Dejar pasar el comentario" : "Let the comment pass", consequence: es ? "No pasa nada hoy, pero la próxima reunión será tensa." : "Nothing happens today, but the next meeting will be tense.", changes: { motivation: -1 } }
+        { label: es ? "Pedir objetivos claros por escrito" : "Ask for clear goals in writing", consequence: es ? "Aclarás lo que esperan de vos y recuperás la confianza gradualmente." : "You clarify expectations and rebuild confidence step by step.", changes: { reputation: 4, energy: -3, health: -2 } },
+        { label: es ? "Mostrar tus avances con números" : "Show your progress with metrics", consequence: es ? "Presentás evidencia sólida de tu esfuerzo diario." : "You present solid evidence of daily work.", changes: { reputation: 5, influence: 2, energy: -4 } },
+        { label: es ? "Dejar pasar el comentario sin enojarte" : "Let the comment pass calmly", consequence: es ? "Cuidás tu cabeza y evitás peleas innecesarias hoy." : "Protects your sanity and avoids unnecessary conflict.", changes: { health: 4, motivation: -2 } }
       ]
     }
   };
@@ -191,90 +247,90 @@ function choicesForScenario(locale: Locale, event: CorporateEvent): Choice[] {
   const es = locale === "es-AR";
   const sets: Record<ScenarioKey, Choice[]> = es ? {
     meeting: [
-      { label: "Pedir una decisión concreta", consequence: "Lográs acortar la reunión y dejar asentada una tarea clara.", changes: { reputation: 2, energy: -1 } },
-      { label: "Hacer una pregunta incómoda", consequence: "La sala se queda en silencio. Mostrás valentía pero al jefe no le gusta el tono.", changes: { influence: 3, reputation: -2 } },
-      { label: "Guardar silencio y tomar notas", consequence: "Evitás discusiones pero terminás armando el resumen para todos.", changes: { energy: -3, reputation: 1 } },
+      { label: "Pedir una decisión concreta", consequence: "Lográs acortar la reunión y dejar asentada una tarea clara.", changes: { reputation: 4, energy: -4, health: -3 } },
+      { label: "Hacer una pregunta incómoda", consequence: "La sala se queda en silencio. Mostrás valentía pero al jefe no le gusta el tono.", changes: { influence: 6, reputation: -5, health: 4 } },
+      { label: "Guardar silencio y tomar notas", consequence: "Evitás discusiones pero terminás armando el resumen para todos.", changes: { energy: -5, health: -5, reputation: 3 } },
     ],
     incident: [
-      { label: "Resolver el problema vos mismo", consequence: "Evitás un desastre mayor, aunque te deja bastante cansado.", changes: { reputation: 3, energy: -3 } },
-      { label: "Pedir ayuda a tu jefe", consequence: "Compartís la responsabilidad del problema y la solución.", changes: { influence: 2, reputation: 1 } },
-      { label: "Esperar a que lo arregle otro", consequence: "El problema se agranda y perdés tiempo esperando.", changes: { health: 1, reputation: -3 }, skipTurns: 1 },
+      { label: "Resolver el problema vos mismo", consequence: "Evitás un desastre mayor, aunque te deja bastante cansado.", changes: { reputation: 6, energy: -7, health: -6 } },
+      { label: "Pedir ayuda a tu jefe", consequence: "Compartís la responsabilidad del problema y la solución.", changes: { influence: 4, reputation: 2, health: -2 } },
+      { label: "Esperar a que lo arregle otro", consequence: "El problema se agranda y perdés tiempo esperando.", changes: { health: 5, reputation: -6, energy: 2 } },
     ],
     reorg: [
-      { label: "Preguntar qué va a pasar", consequence: "No te dan mucha certeza, pero ven que te importa tu trabajo.", changes: { reputation: 2, influence: 1 } },
-      { label: "Hacerte cargo de más tareas", consequence: "Te volvés indispensable pero aumenta tu nivel de cansancio.", changes: { reputation: 4, energy: -4, health: -2 } },
-      { label: "Mantener la calma y observar", consequence: "Evitás el pánico general y cuidás tu salud mental.", changes: { health: 2, influence: -2 } },
+      { label: "Preguntar qué va a pasar", consequence: "No te dan mucha certeza, pero ven que te importa tu trabajo.", changes: { reputation: 3, influence: 3, health: -3 } },
+      { label: "Hacerte cargo de más tareas", consequence: "Te volvés indispensable pero aumenta tu nivel de cansancio.", changes: { reputation: 7, energy: -8, health: -9 } },
+      { label: "Mantener la calma y observar", consequence: "Evitás el pánico general y cuidás tu salud mental.", changes: { health: 8, energy: 4, influence: -4 } },
     ],
     leadership: [
-      { label: "Organizar los pasos concretos", consequence: "Transformás las palabras en un plan de trabajo real.", changes: { reputation: 3, energy: -3 } },
-      { label: "Sumarte a las felicitaciones", consequence: "Quedás bien con los jefes pero el trabajo real sigue pendiente.", changes: { influence: 4, motivation: -2 } },
-      { label: "Avisar que no hay tiempo suficiente", consequence: "Decís la verdad pero te miran de reojo por 'negativo'.", changes: { reputation: -2, health: 1 }, skipTurns: 1 },
+      { label: "Organizar los pasos concretos", consequence: "Transformás las palabras en un plan de trabajo real.", changes: { reputation: 5, energy: -6, health: -4 } },
+      { label: "Sumarte a las felicitaciones", consequence: "Quedás bien con los jefes pero el trabajo real sigue pendiente.", changes: { influence: 6, motivation: -4, health: -3 } },
+      { label: "Avisar que no hay tiempo suficiente", consequence: "Decís la verdad pero te miran de reojo por 'negativo'.", changes: { reputation: -4, health: 6, influence: 3 } },
     ],
     social: [
-      { label: "Charlar un rato con tus compañeros", consequence: "Fortalecés el vínculo y conseguís información útil de pasillo.", changes: { influence: 3, energy: -2 }, item: "Contacto de confianza" },
-      { label: "Quedarte trabajando solo", consequence: "Avanzás con lo tuyo pero te aislás de lo que pasa en el equipo.", changes: { health: 2, influence: -1 } },
-      { label: "Decir exactamente lo que pensás", consequence: "Descargás la bronca, pero tus dichos llegan al jefe.", changes: { motivation: 2, reputation: -4 } },
+      { label: "Charlar un rato con tus compañeros", consequence: "Fortalecés el vínculo y conseguís información útil de pasillo.", changes: { influence: 5, energy: -3, health: 4 }, item: "Contacto de confianza" },
+      { label: "Quedarte trabajando solo", consequence: "Avanzás con lo tuyo pero te aislás de lo que pasa en el equipo.", changes: { health: -4, influence: -3, energy: 3 } },
+      { label: "Decir exactamente lo que pensás", consequence: "Descargás la bronca, pero tus dichos llegan al jefe.", changes: { motivation: 6, reputation: -7, health: 5 } },
     ],
     fun: [
-      { label: "Ir un rato para cumplir", consequence: "Te ven presente y te podés ir a descansar a tu casa.", changes: { reputation: 2, energy: -1 } },
-      { label: "Mostrar entusiasmo exagerado", consequence: "Sumás puntos con superiores pero quedás exhausto.", changes: { influence: 3, energy: -4, motivation: -2 } },
-      { label: "Inventar un compromiso urgente", consequence: "Safás del evento y disfrutás de tu tarde libre.", changes: { health: 2, reputation: -2 } },
+      { label: "Ir un rato para cumplir", consequence: "Te ven presente y te podés ir a descansar a tu casa.", changes: { reputation: 3, energy: -3, health: -2 } },
+      { label: "Mostrar entusiasmo exagerado", consequence: "Sumás puntos con superiores pero quedás exhausto.", changes: { influence: 6, energy: -7, health: -7 } },
+      { label: "Inventar un compromiso urgente", consequence: "Safás del evento y disfrutás de tu tarde libre.", changes: { health: 9, energy: 6, reputation: -5 } },
     ],
     workload: [
-      { label: "Explicar que no llegás con todo", consequence: "Lográs achicar la tarea, aunque tenés que dar explicaciones.", changes: { reputation: 2, energy: -2 } },
-      { label: "Quedarte haciendo horas extras", consequence: "Cumplís con la entrega a costa de tu descanso personal.", changes: { reputation: 4, energy: -5, health: -3 } },
-      { label: "Dejar que el trabajo se atrase", consequence: "Muestrás que era imposible llegar, pero recibís un llamado de atención.", changes: { influence: 1, reputation: -4, health: 1 }, skipTurns: 1 },
+      { label: "Explicar que no llegás con todo", consequence: "Lográs achicar la tarea, aunque tenés que dar explicaciones.", changes: { reputation: -4, health: 9, energy: 6 } },
+      { label: "Quedarte haciendo horas extras", consequence: "Cumplís con la entrega a costa de tu descanso personal.", changes: { reputation: 8, energy: -9, health: -10 } },
+      { label: "Dejar que el trabajo se atrase", consequence: "Muestrás que era imposible llegar, pero recibís un llamado de atención.", changes: { influence: 3, reputation: -8, health: 6 } },
     ],
     credit: [
-      { label: "Aclarar con calma que el trabajo fue tuyo", consequence: "Dejás las cosas claras de buena manera.", changes: { reputation: 2, influence: 1 } },
-      { label: "Dejar pasar el tema para no pelear", consequence: "Evitás un conflicto hoy pero te queda un trago amargo.", changes: { health: -2, motivation: -3 } },
-      { label: "Reclamar tu autoría delante de todos", consequence: "Todos se enteran de la verdad, pero el ambiente queda tenso.", changes: { influence: 3, reputation: -3 }, skipTurns: 1 },
+      { label: "Aclarar con calma que el trabajo fue tuyo", consequence: "Dejás las cosas claras de buena manera.", changes: { reputation: 5, influence: 4, health: -3 } },
+      { label: "Dejar pasar el tema para no pelear", consequence: "Evitás un conflicto hoy pero te queda un trago amargo.", changes: { health: -8, motivation: -7, energy: -2 } },
+      { label: "Reclamar tu autoría delante de todos", consequence: "Todos se enteran de la verdad, pero el ambiente queda tenso.", changes: { influence: 7, reputation: -6, health: 4 } },
     ],
     systems: [
-      { label: "Arreglar la falla y dejar la guía", consequence: "Creás orden y tus compañeros te lo agradecen.", changes: { reputation: 3, energy: -3 }, item: "Guía de supervivencia laboral" },
-      { label: "Pedir que un encargado lo solucione", consequence: "Arman un grupo de chat que no resuelve nada rápido.", changes: { influence: 1, motivation: -2 } },
-      { label: "Usar un atajo provisorio", consequence: "Safás del apuro hoy, pero después tenés que explicarlo.", changes: { energy: 2, reputation: -3 }, skipTurns: 1 },
+      { label: "Arreglar la falla y dejar la guía", consequence: "Creás orden y tus compañeros te lo agradecen.", changes: { reputation: 6, energy: -6, health: -4 }, item: "Guía de supervivencia laboral" },
+      { label: "Pedir que un encargado lo solucione", consequence: "Arman un grupo de chat que no resuelve nada rápido.", changes: { influence: 2, motivation: -4, health: 2 } },
+      { label: "Usar un atajo provisorio", consequence: "Safás del apuro hoy, pero después tenés que explicarlo.", changes: { energy: 4, reputation: -5, health: -2 } },
     ],
     review: [
-      { label: "Mostrar todo lo que hiciste en el año", consequence: "Demostrás tu valor con datos concretos y claros.", changes: { reputation: 3, influence: 1 } },
-      { label: "Prometer que vas a rendir más", consequence: "Sonás motivado, aunque te comprometés a más tareas.", changes: { influence: 3, motivation: -1, energy: -2 } },
-      { label: "Decir la verdad sobre las dificultades", consequence: "La charla se vuelve honesta pero el jefe nota tus quejas.", changes: { health: 2, reputation: -3 } },
+      { label: "Mostrar todo lo que hiciste en el año", consequence: "Demostrás tu valor con datos concretos y claros.", changes: { reputation: 6, influence: 3, health: -4 } },
+      { label: "Prometer que vas a rendir más", consequence: "Sonás motivado, aunque te comprometés a más tareas.", changes: { influence: 6, energy: -6, health: -7 } },
+      { label: "Decir la verdad sobre las dificultades", consequence: "La charla se vuelve honesta pero el jefe nota tus quejas.", changes: { health: 7, reputation: -6, influence: 2 } },
     ],
     politics: [
-      { label: "Apoyar al compañero que tiene razón", consequence: "Ganás un aliado confiable para el futuro.", changes: { influence: 4, reputation: 1 } },
-      { label: "Enfocarte solo en resolver el trabajo", consequence: "El trabajo avanza pero no quedás bien con ningún bando.", changes: { reputation: 2, motivation: -2 } },
-      { label: "Tomar bando públicamente", consequence: "Te la jugás toda por una postura en la oficina.", changes: { influence: 2, reputation: -4 }, skipTurns: 1 },
+      { label: "Apoyar al compañero que tiene razón", consequence: "Ganás un aliado confiable para el futuro.", changes: { influence: 7, reputation: 3, health: -3 } },
+      { label: "Enfocarte solo en resolver el trabajo", consequence: "El trabajo avanza pero no quedás bien con ningún bando.", changes: { reputation: 4, motivation: -4, health: -2 } },
+      { label: "Tomar bando públicamente", consequence: "Te la jugás toda por una postura en la oficina.", changes: { influence: 5, reputation: -7, health: -5 } },
     ],
     boundary: [
-      { label: "Respetar tu horario de salida", consequence: "Recuperás la noche para vos y tus afectos.", changes: { health: 4, energy: 3, reputation: -2 } },
-      { label: "Aceptar quedarte una hora más", consequence: "Das una mano sin regalar toda la noche.", changes: { influence: 2, energy: -1 } },
-      { label: "Ceder y quedarte hasta terminar", consequence: "Demostrás compromiso pero terminás agotado.", changes: { reputation: 3, health: -4, energy: -4 } },
+      { label: "Respetar tu horario de salida", consequence: "Recuperás la noche para vos y tus afectos.", changes: { health: 12, energy: 9, reputation: -5 } },
+      { label: "Aceptar quedarte una hora más", consequence: "Das una mano sin regalar toda la noche.", changes: { influence: 4, energy: -4, health: -3 } },
+      { label: "Ceder y quedarte hasta terminar", consequence: "Demostrás compromiso pero terminás agotado.", changes: { reputation: 7, health: -11, energy: -10 } },
     ],
     wellbeing: [
-      { label: "Tomarte un descanso de verdad", consequence: "Desconectás la cabeza y recuperás energía.", changes: { health: 6, energy: 3, reputation: -2 } },
-      { label: "Hacer una pausa rápida y seguir", consequence: "Respirás cinco minutos y volvés a la carga.", changes: { motivation: 2, energy: -1 } },
-      { label: "Admitir que estás muy cansado", consequence: "Tu jefe te escucha pero anota tu falta de aire.", changes: { health: 4, reputation: -2 }, skipTurns: 1 },
+      { label: "Tomarte un descanso de verdad", consequence: "Desconectás la cabeza y recuperás energía.", changes: { health: 15, energy: 10, reputation: -5 } },
+      { label: "Hacer una pausa rápida y seguir", consequence: "Respirás cinco minutos y volvés a la carga.", changes: { motivation: 5, energy: -3, health: -2 } },
+      { label: "Admitir que estás muy cansado", consequence: "Tu jefe te escucha pero anota tu falta de aire.", changes: { health: 9, reputation: -5, influence: 3 } },
     ],
     life: [
-      { label: "Priorizar tu vida personal hoy", consequence: "Resolvés tus asuntos personales con tranquilidad.", changes: { savings: -5, health: -1 } },
-      { label: "Pedir flexibilidad para salir antes", consequence: "Hacés visible que tenés vida fuera del trabajo.", changes: { health: 3, reputation: -2, influence: 1 } },
-      { label: "Patear lo personal para más adelante", consequence: "Cumplís en el trabajo pero acumulás tensión.", changes: { energy: 1, motivation: -2 }, delayed: { turns: 3, title: "El asunto pendiente vuelve", message: "Lo que postergaste volvió con recargo. Exige solución urgente.", changes: { savings: -7, health: -2 } } },
+      { label: "Priorizar tu vida personal hoy", consequence: "Resolvés tus asuntos personales con tranquilidad.", changes: { health: 8, savings: -6, reputation: -3 } },
+      { label: "Pedir flexibilidad para salir antes", consequence: "Hacés visible que tenés vida fuera del trabajo.", changes: { health: 7, reputation: -4, influence: 3 } },
+      { label: "Patear lo personal para más adelante", consequence: "Cumplís en el trabajo pero acumulás tensión.", changes: { energy: 2, health: -8, motivation: -5 }, delayed: { turns: 3, title: "El asunto pendiente vuelve", message: "Lo que postergaste volvió con recargo. Exige solución urgente.", changes: { savings: -7, health: -6 } } },
     ],
   } : {
-    meeting: [{ label: "Ask for one clear decision", consequence: "Cuts the call short and leaves a clear action item.", changes: { reputation: 2, energy: -1 } }, { label: "Ask the awkward question", consequence: "The room goes silent. Shows courage but the boss dislikes the tone.", changes: { influence: 3, reputation: -2 } }, { label: "Keep quiet and take notes", consequence: "Avoids arguments but leaves you making meeting summaries for everyone.", changes: { energy: -3, reputation: 1 } }],
-    incident: [{ label: "Fix it yourself", consequence: "Prevents a major disaster, though leaves you exhausted.", changes: { reputation: 3, energy: -3 } }, { label: "Ask your boss for help", consequence: "Shares responsibility and the solution with your team.", changes: { influence: 2, reputation: 1 } }, { label: "Wait for someone else to fix it", consequence: "The issue gets worse while you lose time waiting.", changes: { health: 1, reputation: -3 }, skipTurns: 1 }],
-    reorg: [{ label: "Ask about your role", consequence: "Doesn't yield complete certainty, but shows you care.", changes: { reputation: 2, influence: 1 } }, { label: "Take on extra tasks", consequence: "Makes you indispensable but increases your fatigue.", changes: { reputation: 4, energy: -4, health: -2 } }, { label: "Stay calm and observe", consequence: "Avoids panic and protects your mental health.", changes: { health: 2, influence: -2 } }],
-    leadership: [{ label: "Organize concrete next steps", consequence: "Turns big talk into an actual action plan.", changes: { reputation: 3, energy: -3 } }, { label: "Join the applause", consequence: "Looks good to management while actual work waits.", changes: { influence: 4, motivation: -2 } }, { label: "State that resources are missing", consequence: "Tells the truth but earns sideways glances for being 'negative'.", changes: { reputation: -2, health: 1 }, skipTurns: 1 }],
-    social: [{ label: "Chat with your teammates", consequence: "Strengthens relationships and gets useful insider info.", changes: { influence: 3, energy: -2 }, item: "Internal contact" }, { label: "Keep working alone", consequence: "Gets work done but isolates you from team updates.", changes: { health: 2, influence: -1 } }, { label: "Say exactly what you think", consequence: "Vents frustration, but your words reach the boss's ears.", changes: { motivation: 2, reputation: -4 } }],
-    fun: [{ label: "Show up briefly to comply", consequence: "Seen present, then free to head home early.", changes: { reputation: 2, energy: -1 } }, { label: "Show high enthusiasm", consequence: "Earns points with bosses but leaves you fully drained.", changes: { influence: 3, energy: -4, motivation: -2 } }, { label: "Invent an urgent commitment", consequence: "Skips the event and preserves your free evening.", changes: { health: 2, reputation: -2 } }],
-    workload: [{ label: "Explain you can't finish all", consequence: "Shrinks the load slightly, though requires explanations.", changes: { reputation: 2, energy: -2 } }, { label: "Work overtime to deliver", consequence: "Delivers on time at the cost of personal rest.", changes: { reputation: 4, energy: -5, health: -3 } }, { label: "Let the task slip", consequence: "Shows the workload was impossible, earning a minor warning.", changes: { influence: 1, reputation: -4, health: 1 }, skipTurns: 1 }],
-    credit: [{ label: "Calmly clarify it was your work", consequence: "Sets things straight politely.", changes: { reputation: 2, influence: 1 } }, { label: "Let it pass to avoid a fight", consequence: "Avoids conflict today but leaves a bitter taste.", changes: { health: -2, motivation: -3 } }, { label: "Claim credit in front of everyone", consequence: "Everyone learns the truth, but leaves tension.", changes: { influence: 3, reputation: -3 }, skipTurns: 1 }],
-    systems: [{ label: "Fix it and write simple guide", consequence: "Creates order and teammates thank you for it.", changes: { reputation: 3, energy: -3 }, item: "Survival manual" }, { label: "Ask a supervisor to handle it", consequence: "Creates a group chat that doesn't solve anything quickly.", changes: { influence: 1, motivation: -2 } }, { label: "Use a quick temporary shortcut", consequence: "Saves time today, but requires explanations later.", changes: { energy: 2, reputation: -3 }, skipTurns: 1 }],
-    review: [{ label: "Show all your yearly results", consequence: "Proves your value with clear, solid facts.", changes: { reputation: 3, influence: 1 } }, { label: "Promise to deliver even more", consequence: "Sounds motivated, but commits you to higher demands.", changes: { influence: 3, motivation: -1, energy: -2 } }, { label: "Be honest about difficulties", consequence: "Gets genuine, but boss notes your complaints.", changes: { health: 2, reputation: -3 } }],
-    politics: [{ label: "Support the teammate who is right", consequence: "Gains a reliable ally for the future.", changes: { influence: 4, reputation: 1 } }, { label: "Focus purely on doing the work", consequence: "Work gets done but doesn't win over either side.", changes: { reputation: 2, motivation: -2 } }, { label: "Pick a side publicly", consequence: "Goes all-in on an office stance.", changes: { influence: 2, reputation: -4 }, skipTurns: 1 }],
-    boundary: [{ label: "Leave on your official clock-out time", consequence: "Recovers your evening for personal life.", changes: { health: 4, energy: 3, reputation: -2 } }, { label: "Agree to stay just one extra hour", consequence: "Helps out without giving away your entire night.", changes: { influence: 2, energy: -1 } }, { label: "Give in and stay until finished", consequence: "Shows commitment but leaves you exhausted.", changes: { reputation: 3, health: -4, energy: -4 } }],
-    wellbeing: [{ label: "Take a genuine rest break", consequence: "Disconnects your mind and restores energy.", changes: { health: 6, energy: 3, reputation: -2 } }, { label: "Take a 5-minute breather and resume", consequence: "Catches your breath and gets back to work.", changes: { motivation: 2, energy: -1 } }, { label: "Admit you are feeling exhausted", consequence: "Boss listens but notes your exhaustion level.", changes: { health: 4, reputation: -2 }, skipTurns: 1 }],
-    life: [{ label: "Prioritize personal life today", consequence: "Handles personal matters peacefully.", changes: { savings: -5, health: -1 } }, { label: "Ask to leave early", consequence: "Makes it visible that you have a life outside work.", changes: { health: 3, reputation: -2, influence: 1 } }, { label: "Postpone personal task for later", consequence: "Fulfills work duty while accumulating tension.", changes: { energy: 1, motivation: -2 }, delayed: { turns: 3, title: "Postponed issue returns", message: "What you delayed returned with extra urgency.", changes: { savings: -7, health: -2 } } }],
+    meeting: [{ label: "Ask for one clear decision", consequence: "Cuts the call short and leaves a clear action item.", changes: { reputation: 4, energy: -4, health: -3 } }, { label: "Ask the awkward question", consequence: "The room goes silent. Shows courage but the boss dislikes the tone.", changes: { influence: 6, reputation: -5, health: 4 } }, { label: "Keep quiet and take notes", consequence: "Avoids arguments but leaves you making meeting summaries for everyone.", changes: { energy: -5, health: -5, reputation: 3 } }],
+    incident: [{ label: "Fix it yourself", consequence: "Prevents a major disaster, though leaves you exhausted.", changes: { reputation: 6, energy: -7, health: -6 } }, { label: "Ask your boss for help", consequence: "Shares responsibility and the solution with your team.", changes: { influence: 4, reputation: 2, health: -2 } }, { label: "Wait for someone else to fix it", consequence: "The issue gets worse while you lose time waiting.", changes: { health: 5, reputation: -6, energy: 2 } }],
+    reorg: [{ label: "Ask about your role", consequence: "Doesn't yield complete certainty, but shows you care.", changes: { reputation: 3, influence: 3, health: -3 } }, { label: "Take on extra tasks", consequence: "Makes you indispensable but increases your fatigue.", changes: { reputation: 7, energy: -8, health: -9 } }, { label: "Stay calm and observe", consequence: "Avoids panic and protects your mental health.", changes: { health: 8, energy: 4, influence: -4 } }],
+    leadership: [{ label: "Organize concrete next steps", consequence: "Turns big talk into an actual action plan.", changes: { reputation: 5, energy: -6, health: -4 } }, { label: "Join the applause", consequence: "Looks good to management while actual work waits.", changes: { influence: 6, motivation: -4, health: -3 } }, { label: "State that resources are missing", consequence: "Tells the truth but earns sideways glances for being 'negative'.", changes: { reputation: -4, health: 6, influence: 3 } }],
+    social: [{ label: "Chat with your teammates", consequence: "Strengthens relationships and gets useful insider info.", changes: { influence: 5, energy: -3, health: 4 }, item: "Internal contact" }, { label: "Keep working alone", consequence: "Gets work done but isolates you from team updates.", changes: { health: -4, influence: -3, energy: 3 } }, { label: "Say exactly what you think", consequence: "Vents frustration, but your words reach the boss's ears.", changes: { motivation: 6, reputation: -7, health: 5 } }],
+    fun: [{ label: "Show up briefly to comply", consequence: "Seen present, then free to head home early.", changes: { reputation: 3, energy: -3, health: -2 } }, { label: "Show high enthusiasm", consequence: "Earns points with bosses but leaves you fully drained.", changes: { influence: 6, energy: -7, health: -7 } }, { label: "Invent an urgent commitment", consequence: "Skips the event and preserves your free evening.", changes: { health: 9, energy: 6, reputation: -5 } }],
+    workload: [{ label: "Explain you can't finish all", consequence: "Shrinks the load slightly, though requires explanations.", changes: { reputation: -4, health: 9, energy: 6 } }, { label: "Work overtime to deliver", consequence: "Delivers on time at the cost of personal rest.", changes: { reputation: 8, energy: -9, health: -10 } }, { label: "Let the task slip", consequence: "Shows the workload was impossible, earning a minor warning.", changes: { influence: 3, reputation: -8, health: 6 } }],
+    credit: [{ label: "Calmly clarify it was your work", consequence: "Sets things straight politely.", changes: { reputation: 5, influence: 4, health: -3 } }, { label: "Let it pass to avoid a fight", consequence: "Avoids conflict today but leaves a bitter taste.", changes: { health: -8, motivation: -7, energy: -2 } }, { label: "Claim credit in front of everyone", consequence: "Everyone learns the truth, but leaves tension.", changes: { influence: 7, reputation: -6, health: 4 } }],
+    systems: [{ label: "Fix it and write simple guide", consequence: "Creates order and teammates thank you for it.", changes: { reputation: 6, energy: -6, health: -4 }, item: "Survival manual" }, { label: "Ask a supervisor to handle it", consequence: "Creates a group chat that doesn't solve anything quickly.", changes: { influence: 2, motivation: -4, health: 2 } }, { label: "Use a quick temporary shortcut", consequence: "Saves time today, but requires explanations later.", changes: { energy: 4, reputation: -5, health: -2 } }],
+    review: [{ label: "Show all your yearly results", consequence: "Proves your value with clear, solid facts.", changes: { reputation: 6, influence: 3, health: -4 } }, { label: "Promise to deliver even more", consequence: "Sounds motivated, but commits you to higher demands.", changes: { influence: 6, energy: -6, health: -7 } }, { label: "Be honest about difficulties", consequence: "Gets genuine, but boss notes your complaints.", changes: { health: 7, reputation: -6, influence: 2 } }],
+    politics: [{ label: "Support the teammate who is right", consequence: "Gains a reliable ally for the future.", changes: { influence: 7, reputation: 3, health: -3 } }, { label: "Focus purely on doing the work", consequence: "Work gets done but doesn't win over either side.", changes: { reputation: 4, motivation: -4, health: -2 } }, { label: "Pick a side publicly", consequence: "Goes all-in on an office stance.", changes: { influence: 5, reputation: -7, health: -5 } }],
+    boundary: [{ label: "Leave on your official clock-out time", consequence: "Recovers your evening for personal life.", changes: { health: 12, energy: 9, reputation: -5 } }, { label: "Agree to stay just one extra hour", consequence: "Helps out without giving away your entire night.", changes: { influence: 4, energy: -4, health: -3 } }, { label: "Give in and stay until finished", consequence: "Shows commitment but leaves you exhausted.", changes: { reputation: 7, health: -11, energy: -10 } }],
+    wellbeing: [{ label: "Take a genuine rest break", consequence: "Disconnects your mind and restores energy.", changes: { health: 15, energy: 10, reputation: -5 } }, { label: "Take a 5-minute breather and resume", consequence: "Catches your breath and gets back to work.", changes: { motivation: 5, energy: -3, health: -2 } }, { label: "Admit you are feeling exhausted", consequence: "Boss listens but notes your exhaustion level.", changes: { health: 9, reputation: -5, influence: 3 } }],
+    life: [{ label: "Prioritize personal life today", consequence: "Handles personal matters peacefully.", changes: { health: 8, savings: -6, reputation: -3 } }, { label: "Ask to leave early", consequence: "Makes it visible that you have a life outside work.", changes: { health: 7, reputation: -4, influence: 3 } }, { label: "Postpone personal task for later", consequence: "Fulfills work duty while accumulating tension.", changes: { energy: 2, health: -8, motivation: -5 }, delayed: { turns: 3, title: "Postponed issue returns", message: "What you delayed returned with extra urgency.", changes: { savings: -7, health: -6 } } }],
   };
   return sets[key];
 }
@@ -348,15 +404,18 @@ export default function Home() {
       for (const [key, value] of Object.entries(effectiveChanges)) nextStats[key as Stat] = clamp(nextStats[key as Stat] + value!);
       const flags = choice?.tag && !current.flags.includes(choice.tag) ? [...current.flags, choice.tag] : current.flags;
       const item = choice?.item && !current.items.includes(choice.item) ? [...current.items, choice.item] : current.items;
-      const exhaustionWarning = nextStats.health === 0;
-      if (exhaustionWarning) nextStats.health = 1;
+      // Burnout: if health hits 0, the game ends
+      const burnedOut = nextStats.health <= 0;
+      if (burnedOut) nextStats.health = 0;
+      const exhaustionWarning = !burnedOut && nextStats.health <= 5;
+      if (exhaustionWarning) nextStats.health = Math.max(nextStats.health, 1);
       const skippedTurns = (current.skippedTurns ?? 0) + (choice?.skipTurns ?? 0) + (exhaustionWarning ? 1 : 0);
       const penalty = choice?.skipTurns ? ` ${isSpanish ? `Demora: perdés ${choice.skipTurns} turno${choice.skipTurns > 1 ? "s" : ""}.` : `Delay: lose ${choice.skipTurns} turn${choice.skipTurns > 1 ? "s" : ""}.`}` : "";
       const pending = choice?.delayed ? [...current.pending, { ...choice.delayed, origin: message }] : current.pending;
       const delayed = choice?.delayed ? ` ${isSpanish ? `Volverá en ${choice.delayed.turns} turnos: ${choice.delayed.title}.` : `Will return in ${choice.delayed.turns} turns: ${choice.delayed.title}.`}` : "";
       const warning = exhaustionWarning ? ` ${isSpanish ? "Aviso de cansancio: necesitás tomarte un turno para recuperarte." : "Rest signal: taking a turn to recover."}` : "";
       const riskWarnings = exhaustionWarning ? { ...current.riskWarnings, health: (current.riskWarnings.health ?? 0) + 1 } : current.riskWarnings;
-      const ended = current.year >= CAREER_YEARS && nextStats.savings >= 50 && nextStats.health >= 35 ? "won" : undefined;
+      const ended = burnedOut ? "burnout" as const : current.year >= CAREER_YEARS && nextStats.savings >= 50 && nextStats.health >= 35 ? "won" : undefined;
       return { ...current, stats: nextStats, flags, items: item, pending, riskWarnings, skippedTurns, ended, log: [`${message}${penalty}${delayed}${warning}`, ...current.log].slice(0, 5) };
     });
   }
@@ -405,7 +464,31 @@ export default function Home() {
     if (due) {
       setGame(current => ({ ...current, pending: current.pending.filter(consequence => consequence !== due) }));
       const explanation = due.origin ? (isSpanish ? `Esto vuelve por una decisión anterior: ${due.origin} ${due.message}` : `This returns from an earlier decision: ${due.origin} ${due.message}`) : due.message;
-      setActiveEvent({ id: `deferred-${due.title}`, title: due.title, description: explanation, category: isSpanish ? "Consecuencia" : "Consequence", changes: {}, choices: [{ label: isSpanish ? "Afrontar las consecuencias" : "Take the consequence", consequence: isSpanish ? "El tema no se resolvió solo y ahora tiene un costo." : "The issue did not solve itself and now has a cost.", changes: due.changes }], rarity: "rare" });
+      setActiveEvent({
+        id: `deferred-${due.title}`,
+        title: due.title,
+        description: explanation,
+        category: isSpanish ? "Consecuencia" : "Consequence",
+        changes: {},
+        choices: [
+          {
+            label: isSpanish ? "Pelearla y resolverlo de frente" : "Fight back and take ownership",
+            consequence: isSpanish ? "Absorbés el problema. Te cuesta energía y salud mental pero salvas tu reputación." : "You absorb the problem. Costs energy & health but saves reputation.",
+            changes: { ...due.changes, energy: Math.min(-3, (due.changes.energy ?? 0) - 2), health: Math.min(-2, (due.changes.health ?? 0) - 2), reputation: Math.max(3, (due.changes.reputation ?? 0) + 3) }
+          },
+          {
+            label: isSpanish ? "Tomártelo con serenidad y cuidar tu cabeza" : "Take it calmly and protect health",
+            consequence: isSpanish ? "Aceptás el inconveniente sin hacerte mala sangre. Recuperás tranquilidad." : "You accept the issue without getting stressed. Protects mental health.",
+            changes: { health: 7, energy: 4, reputation: -3, savings: Math.min(-2, (due.changes.savings ?? 0) - 2) }
+          },
+          {
+            label: isSpanish ? "Asumir el impacto directo" : "Accept direct impact",
+            consequence: isSpanish ? "Asumís el resultado sin enojarte para no desgastarte más." : "You accept the result without extra stress.",
+            changes: due.changes
+          }
+        ],
+        rarity: "rare"
+      });
       return;
     }
     const risk = riskEventFor(game, locale);
@@ -422,7 +505,26 @@ export default function Home() {
     window.setTimeout(() => {
       setDicePush(result); setRolling(false); const newPosition = (game.position + result) % tiles.length; const crossedYear = newPosition < game.position; const landed = tiles[newPosition];
       const designed = choices[landed]; const relevantEvents = events.filter(event => scenarioForEvent(event) === tileScenarioGroups[newPosition]); const unseen = relevantEvents.filter(event => !game.seenEventIds.includes(event.id) && !game.recentEventTitles.includes(event.title)); const event = designed ? { ...designed, id: `choice-${locale}-${landed}`, rarity: "uncommon" as const } : pick(unseen.length ? unseen : relevantEvents.length ? relevantEvents : events);
-      setGame(current => ({ ...current, position: newPosition, year: current.year + (crossedYear ? 1 : 0), turn: current.turn + 1, riskCooldown: Math.max(0, current.riskCooldown - 1), pending: current.pending.map(consequence => ({ ...consequence, turns: consequence.turns - 1 })), seenEventIds: [...current.seenEventIds, event.id].slice(-180), recentEventTitles: [...current.recentEventTitles, event.title].slice(-5), stats: { ...current.stats, savings: clamp(current.stats.savings + (crossedYear ? 5 : 0)), salary: clamp(current.stats.salary + (crossedYear ? 2 : 0)) }, log: [crossedYear ? text.passedYear : `${text.landed} ${landed}.`, ...current.log].slice(0, 5) }));
+      setGame(current => {
+        const nextYear = current.year + (crossedYear ? 1 : 0);
+        const drain = yearDrain(nextYear);
+        const ambient = ambientStress(nextYear, current.stats);
+        const recovery = passiveRecovery(current.stats);
+        const nextStats = { ...current.stats };
+        // Apply year drain
+        for (const [k, v] of Object.entries(drain)) nextStats[k as Stat] = clamp(nextStats[k as Stat] + v!);
+        // Apply ambient stress
+        for (const [k, v] of Object.entries(ambient)) nextStats[k as Stat] = clamp(nextStats[k as Stat] + v!);
+        // Apply passive recovery
+        for (const [k, v] of Object.entries(recovery)) nextStats[k as Stat] = clamp(nextStats[k as Stat] + v!);
+        // Yearly bonuses
+        nextStats.savings = clamp(nextStats.savings + (crossedYear ? 5 : 0));
+        nextStats.salary = clamp(nextStats.salary + (crossedYear ? 2 : 0));
+        // Burnout check after ambient
+        const burnedOut = nextStats.health <= 0;
+        if (burnedOut) nextStats.health = 0;
+        return { ...current, position: newPosition, year: nextYear, turn: current.turn + 1, riskCooldown: Math.max(0, current.riskCooldown - 1), pending: current.pending.map(consequence => ({ ...consequence, turns: consequence.turns - 1 })), seenEventIds: [...current.seenEventIds, event.id].slice(-180), recentEventTitles: [...current.recentEventTitles, event.title].slice(-5), stats: nextStats, ended: burnedOut ? "burnout" as const : current.ended, log: [crossedYear ? text.passedYear : `${text.landed} ${landed}.`, ...current.log].slice(0, 5) };
+      });
       window.setTimeout(() => setDicePush(null), 1960);
       window.setTimeout(() => {
         if (TASK_TILES.includes(newPosition)) {
@@ -594,7 +696,7 @@ export default function Home() {
     {activeEvent && (
       <div className="modal-backdrop push-backdrop">
         <article className="event-card push-card">
-          <button className="dismiss-card" onClick={() => setActiveEvent(null)} aria-label={isSpanish ? "Cerrar tarjeta" : "Close card"}>×</button>
+          {/* No dismiss — you must face every decision */}
           <div className="event-top">
             <span>{activeEvent.category} · {text.card}</span>
             <em className={activeEvent.rarity}>{text.rarities[activeEvent.rarity]}</em>
